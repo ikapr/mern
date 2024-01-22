@@ -9,6 +9,7 @@ import Auth from '../utils/auth';
 const AppNavbar = () => {
   // set modal display state
   const [showModal, setShowModal] = useState(false);
+  let [user, setUser] = useState(Auth.getProfile().data || {});
 
   return (
     <>
@@ -20,6 +21,7 @@ const AppNavbar = () => {
           <Navbar.Toggle aria-controls='navbar' />
           <Navbar.Collapse id='navbar' className='d-flex flex-row-reverse'>
             <Nav className='ml-auto d-flex'>
+              {Auth.loggedIn() && <span className={`welcomeUser nav-link`}>Welcome, {user.username}</span>}
               <Nav.Link as={Link} to='/'>
                 Search For Books
               </Nav.Link>
