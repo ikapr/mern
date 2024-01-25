@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useContext } from 'react';
 import {
   Container,
   Col,
@@ -9,17 +9,36 @@ import {
 } from 'react-bootstrap';
 
 import Auth from '../utils/auth';
-import { saveBook, searchGoogleBooks } from '../utils/API';
+import { searchGoogleBooks } from '../utils/API';
 import { saveBookIds, getSavedBookIds } from '../utils/localStorage';
+import { gql, useMutation } from '@apollo/client';
+import { GloballySharedData } from '../App';
 
 const SearchBooks = () => {
   // create state for holding returned google api data
+  let { user } = useContext(GloballySharedData);
   const [searchedBooks, setSearchedBooks] = useState([]);
   // create state for holding our search field data
   const [searchInput, setSearchInput] = useState('');
 
   // create state to hold saved bookId values
   const [savedBookIds, setSavedBookIds] = useState(getSavedBookIds());
+
+  let [saveBookMutation] = useMutation(gql`
+    mutation AddBookToSavedBooks($userId: ID!, $book: BookInput!) {
+      addBookToSavedBooks(userId: $userId, book: $book) {
+        _id
+        savedBooks {
+          authors
+          description
+          bookId
+          image
+          link
+          title
+        }
+      }
+    }  
+  `);
 
   // set up useEffect hook to save `savedBookIds` list to localStorage on component unmount
   // learn more here: https://reactjs.org/docs/hooks-effect.html#effects-with-cleanup
@@ -42,9 +61,9 @@ const SearchBooks = () => {
         throw new Error('something went wrong!');
       }
 
-      const { items } = await response.json();
+      const data = await response.json();
 
-      const bookData = items.map((book) => ({
+      const bookData = data.items.map((book) => ({
         bookId: book.id,
         authors: book.volumeInfo.authors || ['No author to display'],
         title: book.volumeInfo.title,
@@ -72,18 +91,28 @@ const SearchBooks = () => {
     }
 
     try {
-      const response = await saveBook(bookToSave, token);
+      let loggedInUser = Auth.getProfile();
+      let vars = { variables: { userId: loggedInUser.userId, book: bookToSave } };
+      await saveBookMutation(vars);
+      // const response = await saveBook(bookToSave, token);
 
-      if (!response.ok) {
-        throw new Error('something went wrong!');
-      }
+      // if (!response.ok) {
+      //   throw new Error('something went wrong!');
+      // }
 
-      // if book successfully saves to user's account, save book id to state
+      // // if book successfully saves to user's account, save book id to state
       setSavedBookIds([...savedBookIds, bookToSave.bookId]);
-    } catch (err) {
-      console.error(err);
+    } catch (error) {
+      console.log(`Error Saving Book`, {error, bookToSave, user});
     }
   };
+
+  const bookIsSaved = (book) => {
+    let bookSaved = savedBookIds && Array.isArray(savedBookIds) ? savedBookIds?.some((savedBookId) => savedBookId === book.bookId) : user && user != null && user.savedBooks && Array.isArray(user.savedBooks) ? user.savedBooks?.some((savedBook) => savedBook.bookId === book.bookId) : false;
+
+    // console.log(`Book Saved?`, {bookSaved, book, user});
+    return bookSaved;
+  }
 
   return (
     <>
@@ -121,7 +150,7 @@ const SearchBooks = () => {
         <Row>
           {searchedBooks.map((book) => {
             return (
-              <Col md="4" key={book.bookId}>
+              <Col md="3" key={book.bookId}>
                 <Card border='dark'>
                   {book.image ? (
                     <Card.Img src={book.image} alt={`The cover for ${book.title}`} variant='top' />
@@ -132,11 +161,10 @@ const SearchBooks = () => {
                     <Card.Text>{book.description}</Card.Text>
                     {Auth.loggedIn() && (
                       <Button
-                        disabled={savedBookIds?.some((savedBookId) => savedBookId === book.bookId)}
+                        disabled={bookIsSaved(book)}
                         className='btn-block btn-info'
                         onClick={() => handleSaveBook(book.bookId)}>
-                        {savedBookIds?.some((savedBookId) => savedBookId === book.bookId)
-                          ? 'This book has already been saved!'
+                        {bookIsSaved(book) ? 'This book has already been saved!'
                           : 'Save this Book!'}
                       </Button>
                     )}

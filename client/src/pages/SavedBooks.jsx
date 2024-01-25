@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useContext } from 'react';
 import {
   Container,
   Card,
@@ -7,40 +7,73 @@ import {
   Col
 } from 'react-bootstrap';
 
-import { getMe, deleteBook } from '../utils/API';
+// import { deleteBook } from '../utils/API';
 import Auth from '../utils/auth';
-import { removeBookId } from '../utils/localStorage';
+import { getSavedBookIds, removeBookId } from '../utils/localStorage';
+import { GloballySharedData } from '../App';
+import { gql, useMutation } from '@apollo/client';
 
 const SavedBooks = () => {
-  const [userData, setUserData] = useState({});
+  let { state, user, users } = useContext(GloballySharedData);
+  const [userData, setUserData] = useState(user && user != null && user.savedBooks ? user : {});
+  let [loading, setLoading] = useState(true);
+  const [savedBookIds, setSavedBookIds] = useState(getSavedBookIds());
+
+  const [removeBookMutation] = useMutation(gql`
+    mutation RemoveBookFromSavedBooks($userId: ID!, $bookId: ID!) {
+      removeBookFromSavedBooks(userId: $userId, bookId: $bookId) {
+        _id
+        email
+        username
+        savedBooks {
+          authors
+          description
+          bookId
+          image
+          link
+          title
+        }
+      }
+    }
+  `);
 
   // use this to determine if `useEffect()` hook needs to run again
-  const userDataLength = Object.keys(userData).length;
+  const userDataLength = 0;
 
   useEffect(() => {
     const getUserData = async () => {
       try {
-        const token = Auth.loggedIn() ? Auth.getToken() : null;
+        if (user && user != null && user.savedBooks) {
+          // console.log(`User Data`, user);
+          setLoading(false);
+          setUserData(user);
+        } else {
+          // const token = Auth.loggedIn() ? Auth.getToken() : null;
 
-        if (!token) {
-          return false;
+          // if (!token) {
+          //   return false;
+          // }
+
+          // const response = await getMe(token);
+
+          // if (!response.ok) {
+          //   throw new Error('something went wrong!');
+          // }
+
+          // const databaseUser = await response.json();
+
+          setLoading(false);
+          setUserData({});
         }
-
-        const response = await getMe(token);
-
-        if (!response.ok) {
-          throw new Error('something went wrong!');
-        }
-
-        const user = await response.json();
-        setUserData(user);
-      } catch (err) {
-        console.error(err);
+      } catch (error) {
+        console.log(`Error getting User Data`, error);
+        setLoading(false);
       }
     };
 
     getUserData();
-  }, [userDataLength]);
+    if (userDataLength === 0) setLoading(false);
+  }, [user, state, users, userDataLength]);
 
   // create function that accepts the book's mongo _id value as param and deletes the book from the database
   const handleDeleteBook = async (bookId) => {
@@ -51,24 +84,31 @@ const SavedBooks = () => {
     }
 
     try {
-      const response = await deleteBook(bookId, token);
+      // const response = await deleteBook(bookId, token);
 
-      if (!response.ok) {
-        throw new Error('something went wrong!');
-      }
+      // if (!response.ok) {
+      //   throw new Error('something went wrong!');
+      // }
 
-      const updatedUser = await response.json();
-      setUserData(updatedUser);
-      // upon success, remove book's id from localStorage
+      // const updatedUser = await response.json();
+      // setUserData(updatedUser);
+      // // upon success, remove book's id from localStorage
+      
+      let loggedInUser = Auth.getProfile();
+      let vars = { variables: { userId: loggedInUser.userId, bookId: bookId } };
+      await removeBookMutation(vars);
       removeBookId(bookId);
-    } catch (err) {
-      console.error(err);
+
+      // Update local state to reflect the removal
+      setSavedBookIds(savedBookIds.filter(id => id !== bookId));
+    } catch (error) {
+      console.log(`Error Removing Book`, error);
     }
   };
 
   // if data isn't here yet, say so
-  if (!userDataLength) {
-    return <h2>LOADING...</h2>;
+  if (!userDataLength && user != null && !user.savedBooks) {
+    return <h2>{loading ? `LOADING ...` : user && user != null ? `No Books` : `Log In to See Saved Books`}</h2>;
   }
 
   return (
@@ -80,14 +120,14 @@ const SavedBooks = () => {
       </div>
       <Container>
         <h2 className='pt-5'>
-          {userData.savedBooks.length
+          {userData && userData.savedBooks && userData.savedBooks.length
             ? `Viewing ${userData.savedBooks.length} saved ${userData.savedBooks.length === 1 ? 'book' : 'books'}:`
             : 'You have no saved books!'}
         </h2>
         <Row>
-          {userData.savedBooks.map((book, bookIndex) => {
+          {userData && userData.savedBooks && userData.savedBooks.map((book, bookIndex) => {
             return (
-              <Col md="4" key={bookIndex}>
+              <Col md="3" key={bookIndex}>
                 <Card key={book.bookId} border='dark'>
                   {book.image ? <Card.Img src={book.image} alt={`The cover for ${book.title}`} variant='top' /> : null}
                   <Card.Body>

@@ -1,16 +1,46 @@
+import { useContext } from 'react';
 import { useState } from 'react';
 import { Form, Button, Alert } from 'react-bootstrap';
 
-import { createUser } from '../utils/API';
+import { useMutation, gql } from '@apollo/client';
+
+// import { createUser } from '../utils/API';
 import Auth from '../utils/auth';
+import { GloballySharedData } from '../App';
 
 const SignupForm = () => {
+  let { setUser } = useContext(GloballySharedData);
   // set initial form state
   const [userFormData, setUserFormData] = useState({ username: '', email: '', password: '' });
   // set state for form validation
   const [validated] = useState(false);
   // set state for alert
   const [showAlert, setShowAlert] = useState(false);
+
+  const [addUserMutation] = useMutation(gql`
+    mutation AddUser($newUser: NewUserInput!) {
+      addUser(newUser: $newUser) {
+        token
+        user {
+          _id
+          email
+          username
+          createdAt
+          updatedAt
+          savedBooks {
+            link
+            title
+            image
+            bookId
+            authors
+            createdAt
+            updatedAt
+            description
+          }
+        }
+      }
+    }
+  `);
 
   const handleInputChange = (event) => {
     const { name, value } = event.target;
@@ -28,15 +58,36 @@ const SignupForm = () => {
     }
 
     try {
-      const response = await createUser(userFormData);
+      // const response = await createUser(userFormData);
 
-      if (!response.ok) {
-        throw new Error('something went wrong!');
-      }
+      // if (!response.ok) {
+      //   throw new Error('something went wrong!');
+      // }
 
-      const { token, user } = await response.json();
-      console.log(user);
-      Auth.login(token);
+      // const { token, user } = await response.json();
+      // console.log(user);
+      // Auth.login(token);
+
+      let { username: usernameField, email: emailField, password: passwordField } = event.target;
+
+      const { data } = await addUserMutation({
+        variables: {
+          newUser: {
+            email: emailField.value,
+            password: passwordField.value,
+            username: usernameField.value,
+          },
+        },
+      });
+
+      let { addUser: userAndToken } = data;
+
+      console.log(`User and Token`, userAndToken);
+
+      setUser(userAndToken.user);
+      Auth.login(userAndToken.token);
+      localStorage.setItem(`user`, JSON.stringify(userAndToken.user));
+
     } catch (err) {
       console.error(err);
       setShowAlert(true);

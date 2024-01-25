@@ -1,15 +1,21 @@
-import { useState } from 'react';
+import { useContext, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Navbar, Nav, Container, Modal, Tab } from 'react-bootstrap';
 import SignUpForm from './SignupForm';
 import LoginForm from './LoginForm';
 
 import Auth from '../utils/auth';
+import { GloballySharedData } from '../App';
 
 const AppNavbar = () => {
   // set modal display state
+  let { user, setUser } = useContext(GloballySharedData);
   const [showModal, setShowModal] = useState(false);
-  let [user, setUser] = useState(Auth.getProfile().data || {});
+
+  const logout = () => {
+    setUser(null);
+    Auth.logout();
+  }
 
   return (
     <>
@@ -21,7 +27,7 @@ const AppNavbar = () => {
           <Navbar.Toggle aria-controls='navbar' />
           <Navbar.Collapse id='navbar' className='d-flex flex-row-reverse'>
             <Nav className='ml-auto d-flex'>
-              {Auth.loggedIn() && <span className={`welcomeUser nav-link`}>Welcome, {user.username}</span>}
+              {Auth && Auth.loggedIn() && user && user != null && <Nav.Link as={Link} to='/saved' className={`welcomeUser nav-link`}>Welcome, {user.username}</Nav.Link>}
               <Nav.Link as={Link} to='/'>
                 Search For Books
               </Nav.Link>
@@ -31,7 +37,7 @@ const AppNavbar = () => {
                   <Nav.Link as={Link} to='/saved'>
                     See Your Books
                   </Nav.Link>
-                  <Nav.Link onClick={Auth.logout}>Logout</Nav.Link>
+                  <Nav.Link onClick={() => logout()}>Logout</Nav.Link>
                 </>
               ) : (
                 <Nav.Link onClick={() => setShowModal(true)}>Login/Sign Up</Nav.Link>
